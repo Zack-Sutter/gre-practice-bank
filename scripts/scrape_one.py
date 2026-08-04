@@ -104,6 +104,12 @@ def extract_official_answer(chunk: str, post_id: str) -> str:
         re.DOTALL,
     )
     if not match:
+        match = re.search(
+            r'<div class="spoiler-hidden">\s*(.*?)\s*</div>',
+            chunk,
+            re.DOTALL,
+        )
+    if not match:
         raise ValueError(f"official answer spoiler not found for post {post_id!r}")
 
     answer = html_to_text(match.group(1))

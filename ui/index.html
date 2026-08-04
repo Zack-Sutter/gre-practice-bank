@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GRE Practice</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(', '\\)'], ['$', '$']] },
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</head>
+<body>
+  <header class="header">
+    <h1 class="title">GRE Practice</h1>
+    <div class="stats" id="stats">
+      <div class="dist-wrap" title="Rating distribution">
+        <div class="dist-chart" id="dist-bar" aria-label="Rating distribution"></div>
+      </div>
+      <div class="stat-summary">
+        <div class="avg-rating" id="avg-rating" title="Average rating">
+          <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" fill="currentColor"/>
+          </svg>
+          <span id="avg-value">—</span>
+        </div>
+        <div class="avg-time" id="avg-time" title="Average time">
+          <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span id="avg-time-value">0:00</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <article class="card" id="question-card">
+      <div class="question-body" id="question-body"></div>
+      <a class="source-link" id="source-link" href="#" target="_blank" rel="noopener noreferrer">Source</a>
+
+      <div class="answer-section">
+        <div class="reveal-bar">
+          <button class="btn btn-primary" id="reveal-btn" type="button">Reveal Answer</button>
+          <span class="prior-stats hidden" id="prior-stats"></span>
+        </div>
+        <div class="answer hidden" id="answer"></div>
+      </div>
+
+      <div class="stars hidden" id="stars" role="group" aria-label="Rate your ability">
+        <button class="star" type="button" data-rating="1" aria-label="1 star">★</button>
+        <button class="star" type="button" data-rating="2" aria-label="2 stars">★</button>
+        <button class="star" type="button" data-rating="3" aria-label="3 stars">★</button>
+        <button class="star" type="button" data-rating="4" aria-label="4 stars">★</button>
+        <button class="star" type="button" data-rating="5" aria-label="5 stars">★</button>
+      </div>
+    </article>
+
+    <nav class="nav">
+      <button class="btn" id="prev-btn" type="button" disabled>← Previous</button>
+      <div class="timer" id="timer">
+        <span class="timer-display" id="timer-display">0:00</span>
+        <button class="btn btn-timer" id="timer-toggle" type="button" aria-label="Pause">
+          <span class="timer-glyph timer-glyph-pause" aria-hidden="true"></span>
+          <span class="timer-glyph timer-glyph-play hidden" aria-hidden="true"></span>
+        </button>
+      </div>
+      <button class="btn" id="next-btn" type="button">Next →</button>
+    </nav>
+  </main>
+
+  <div class="error hidden" id="error"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

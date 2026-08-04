@@ -4,3 +4,7 @@
 # Python
 __pycache__/
 *.pyc
+
+# Local practice progress
+data/ratings.json
+data/times.json

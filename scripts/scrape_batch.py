@@ -47,13 +47,21 @@ def main() -> int:
     opener = s.make_opener()
     s.login(opener, env["GRE_PREPCLUB_USERNAME"], env["GRE_PREPCLUB_PASSWORD"])
 
+    ok, skipped = 0, 0
     for i, url in enumerate(urls):
         if i > 0:
             print(f"waiting {DELAY_SECONDS}s...")
             time.sleep(DELAY_SECONDS)
-        question = s.scrape_question(opener, url)
-        s.upsert_question(question)
-        print(f"wrote p{question['post_id']} ({question['official_answer']})")
+        try:
+            question = s.scrape_question(opener, url)
+            s.upsert_question(question)
+            ok += 1
+            print(f"wrote p{question['post_id']} ({question['official_answer']})")
+        except Exception as exc:
+            skipped += 1
+            post_id = s.parse_post_id(url) if "#p" in url else "?"
+            print(f"skipped p{post_id}: {exc}", file=sys.stderr)
+    print(f"done: {ok} scraped, {skipped} skipped")
     return 0
 
 
