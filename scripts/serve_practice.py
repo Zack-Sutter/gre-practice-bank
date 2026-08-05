@@ -14,9 +14,11 @@ UI_DIR = ROOT / "ui"
 QUESTIONS_FILE = ROOT / "data" / "questions.jsonl"
 RATINGS_FILE = ROOT / "data" / "ratings.json"
 TIMES_FILE = ROOT / "data" / "times.json"
+COMMENTS_FILE = ROOT / "data" / "comments.json"
 WORDS_FILE = ROOT / "data" / "words.jsonl"
 WORD_RATINGS_FILE = ROOT / "data" / "word_ratings.json"
 WORD_TIMES_FILE = ROOT / "data" / "word_times.json"
+WORD_COMMENTS_FILE = ROOT / "data" / "word_comments.json"
 HOST = "127.0.0.1"
 PORT = 8765
 
@@ -59,6 +61,16 @@ def save_times(times: dict[str, int]) -> None:
     TIMES_FILE.write_text(json.dumps(times, indent=2) + "\n", encoding="utf-8")
 
 
+def load_comments() -> dict[str, str]:
+    if not COMMENTS_FILE.exists():
+        return {}
+    return {k: str(v) for k, v in json.loads(COMMENTS_FILE.read_text(encoding="utf-8")).items()}
+
+
+def save_comments(comments: dict[str, str]) -> None:
+    COMMENTS_FILE.write_text(json.dumps(comments, indent=2) + "\n", encoding="utf-8")
+
+
 def load_word_ratings() -> dict[str, int]:
     if not WORD_RATINGS_FILE.exists():
         raise FileNotFoundError("word_ratings.json not found; run scripts/seed_word_ratings.py first")
@@ -79,7 +91,21 @@ def save_word_times(times: dict[str, int]) -> None:
     WORD_TIMES_FILE.write_text(json.dumps(times, indent=2) + "\n", encoding="utf-8")
 
 
-def compute_stats(ratings: dict[str, int], times: dict[str, int] | None = None) -> dict:
+def load_word_comments() -> dict[str, str]:
+    if not WORD_COMMENTS_FILE.exists():
+        return {}
+    return {k: str(v) for k, v in json.loads(WORD_COMMENTS_FILE.read_text(encoding="utf-8")).items()}
+
+
+def save_word_comments(comments: dict[str, str]) -> None:
+    WORD_COMMENTS_FILE.write_text(json.dumps(comments, indent=2) + "\n", encoding="utf-8")
+
+
+def compute_stats(
+    ratings: dict[str, int],
+    times: dict[str, int] | None = None,
+    comments: dict[str, str] | None = None,
+) -> dict:
     counts = {str(i): 0 for i in range(6)}
     rated: list[int] = []
     for value in ratings.values():
@@ -96,6 +122,8 @@ def compute_stats(ratings: dict[str, int], times: dict[str, int] | None = None) 
     payload = {"counts": counts, "average": average, "average_time": average_time, "ratings": ratings}
     if times is not None:
         payload["times"] = times
+    if comments is not None:
+        payload["comments"] = comments
     return payload
 
 
@@ -133,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
             except FileNotFoundError as exc:
                 self._send_error_json(500, str(exc))
                 return
-            self._send_json(200, compute_stats(ratings, load_times()))
+            self._send_json(200, compute_stats(ratings, load_times(), load_comments()))
             return
 
         if path == "/api/words":
@@ -146,7 +174,7 @@ class Handler(BaseHTTPRequestHandler):
             except FileNotFoundError as exc:
                 self._send_error_json(500, str(exc))
                 return
-            self._send_json(200, compute_stats(ratings, load_word_times()))
+            self._send_json(200, compute_stats(ratings, load_word_times(), load_word_comments()))
             return
 
         if path in ("/", "/index.html"):
@@ -171,6 +199,7 @@ class Handler(BaseHTTPRequestHandler):
                 save_ratings=save_ratings,
                 load_times=load_times,
                 save_times=save_times,
+                load_comments=load_comments,
                 unknown_label="post_id",
             )
             return
@@ -182,6 +211,29 @@ class Handler(BaseHTTPRequestHandler):
                 save_ratings=save_word_ratings,
                 load_times=load_word_times,
                 save_times=save_word_times,
+                load_comments=load_word_comments,
+                unknown_label="word",
+            )
+            return
+
+        if path == "/api/comments":
+            self._save_comment(
+                id_key="post_id",
+                load_ratings=load_ratings,
+                load_times=load_times,
+                load_comments=load_comments,
+                save_comments=save_comments,
+                unknown_label="post_id",
+            )
+            return
+
+        if path == "/api/word-comments":
+            self._save_comment(
+                id_key="word",
+                load_ratings=load_word_ratings,
+                load_times=load_word_times,
+                load_comments=load_word_comments,
+                save_comments=save_word_comments,
                 unknown_label="word",
             )
             return
@@ -196,6 +248,7 @@ class Handler(BaseHTTPRequestHandler):
         save_ratings,
         load_times,
         save_times,
+        load_comments,
         unknown_label: str,
     ) -> None:
         try:
@@ -232,7 +285,44 @@ class Handler(BaseHTTPRequestHandler):
         times[item_id] = seconds
         save_times(times)
 
-        self._send_json(200, compute_stats(ratings, times))
+        self._send_json(200, compute_stats(ratings, times, load_comments()))
+
+    def _save_comment(
+        self,
+        *,
+        id_key: str,
+        load_ratings,
+        load_times,
+        load_comments,
+        save_comments,
+        unknown_label: str,
+    ) -> None:
+        try:
+            body = self._read_json_body() or {}
+            item_id = str(body.get(id_key, ""))
+            comment = str(body.get("comment", ""))
+        except (TypeError, ValueError):
+            self._send_error_json(400, f"expected {{ {id_key}, comment }}")
+            return
+
+        try:
+            ratings = load_ratings()
+        except FileNotFoundError as exc:
+            self._send_error_json(500, str(exc))
+            return
+
+        if item_id not in ratings:
+            self._send_error_json(400, f"unknown {unknown_label}: {item_id}")
+            return
+
+        comments = load_comments()
+        if comment.strip():
+            comments[item_id] = comment
+        else:
+            comments.pop(item_id, None)
+        save_comments(comments)
+
+        self._send_json(200, compute_stats(ratings, load_times(), comments))
 
     def _serve_file(self, path: Path) -> None:
         content = path.read_bytes()

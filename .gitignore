@@ -8,5 +8,7 @@ __pycache__/
 # Local practice progress
 data/ratings.json
 data/times.json
+data/comments.json
 data/word_ratings.json
 data/word_times.json
+data/word_comments.json

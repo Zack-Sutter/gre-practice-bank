@@ -1,4 +1,4 @@
-const WEIGHTS = [80, 10, 5, 3, 1, 1];
+const WEIGHTS = [90, 5, 2, 1, 1, 1];
 
 let mode = "quant";
 
@@ -6,6 +6,7 @@ const quant = {
   items: [],
   ratings: {},
   times: {},
+  comments: {},
   stats: null,
   history: [],
   historyIndex: -1,
@@ -16,6 +17,7 @@ const vocab = {
   items: [],
   ratings: {},
   times: {},
+  comments: {},
   stats: null,
   history: [],
   historyIndex: -1,
@@ -71,6 +73,10 @@ function escapeHtml(text) {
 
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function etymonlineUrl(word) {
+  return `https://www.etymonline.com/search?q=${encodeURIComponent(word)}`;
 }
 
 function shuffle(items) {
@@ -221,6 +227,7 @@ function renderStats(stats, bucket) {
   bucket.stats = stats;
   bucket.ratings = stats.ratings;
   bucket.times = stats.times || {};
+  bucket.comments = stats.comments || {};
 
   if (active() !== bucket) return;
 
@@ -385,6 +392,7 @@ function updateModeUI() {
 function resetRevealState() {
   $("answer").classList.add("hidden");
   $("stars").classList.add("hidden");
+  hideCommentAside();
 
   if (mode === "quant") {
     $("reveal-btn").classList.remove("hidden");
@@ -411,7 +419,15 @@ function renderChoices(question) {
     btn.innerHTML =
       `<span class="choice-word">${escapeHtml(word)}</span>` +
       `<span class="choice-def">${escapeHtml(definition)}</span>`;
-    btn.addEventListener("click", () => selectChoice(word, question));
+    btn.addEventListener("click", (e) => {
+      if (vocab.answered) {
+        if (e.target.closest(".choice-word")) {
+          window.open(etymonlineUrl(word), "_blank", "noopener,noreferrer");
+        }
+        return;
+      }
+      selectChoice(word, question);
+    });
     container.appendChild(btn);
   }
 }
@@ -422,7 +438,6 @@ function selectChoice(selected, question) {
   stopTimer();
 
   $("choices").querySelectorAll(".choice-btn").forEach((btn) => {
-    btn.disabled = true;
     btn.classList.add("revealed");
     const word = btn.dataset.word;
     if (word === question.answer) {
@@ -433,6 +448,96 @@ function selectChoice(selected, question) {
   });
 
   $("stars").classList.remove("hidden");
+  showCommentAside(vocab.history[vocab.historyIndex]);
+}
+
+function hideCommentAside() {
+  $("comment-empty").classList.add("hidden");
+  $("comment-view").classList.add("hidden");
+  $("comment-edit").classList.add("hidden");
+}
+
+const COMMENT_TEXT_BASE_REM = 0.9;
+const COMMENT_TEXT_MIN_REM = 0.65;
+const COMMENT_TEXT_STEP_REM = 0.05;
+
+function fitCommentText() {
+  const el = $("comment-text");
+  const view = $("comment-view");
+  if (view.classList.contains("hidden")) return;
+
+  const box = view.querySelector(".comment-box");
+  const maxHeight = box ? box.clientHeight - 4 : $("stars").clientHeight;
+  let size = COMMENT_TEXT_BASE_REM;
+  el.style.fontSize = `${size}rem`;
+
+  while (size > COMMENT_TEXT_MIN_REM) {
+    if (el.scrollHeight <= maxHeight && el.scrollWidth <= el.clientWidth) {
+      break;
+    }
+    size -= COMMENT_TEXT_STEP_REM;
+    el.style.fontSize = `${size}rem`;
+  }
+}
+
+function renderCommentAside(id) {
+  const bucket = active();
+  const text = bucket.comments[id] || "";
+
+  $("comment-empty").classList.toggle("hidden", text.length > 0);
+  $("comment-view").classList.toggle("hidden", text.length === 0);
+  $("comment-edit").classList.add("hidden");
+
+  if (text.length > 0) {
+    $("comment-text").textContent = text;
+    $("comment-text").style.fontSize = "";
+    requestAnimationFrame(() => fitCommentText());
+  }
+}
+
+function showCommentAside(id) {
+  renderCommentAside(id);
+}
+
+function enterCommentEdit() {
+  const bucket = active();
+  const id = bucket.history[bucket.historyIndex];
+  const text = bucket.comments[id] || "";
+
+  $("comment-empty").classList.add("hidden");
+  $("comment-view").classList.add("hidden");
+  $("comment-edit").classList.remove("hidden");
+  $("comment-input").value = text;
+  $("comment-input").focus();
+}
+
+function cancelCommentEdit() {
+  const bucket = active();
+  renderCommentAside(bucket.history[bucket.historyIndex]);
+}
+
+async function saveComment() {
+  const bucket = active();
+  const id = bucket.history[bucket.historyIndex];
+  const text = $("comment-input").value;
+  const url = mode === "quant" ? "/api/comments" : "/api/word-comments";
+  const body =
+    mode === "quant" ? { post_id: id, comment: text } : { word: id, comment: text };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showError(err.error || "failed to save note");
+    return;
+  }
+
+  renderStats(await res.json(), bucket);
+  renderCommentAside(id);
 }
 
 async function renderQuantQuestion(postId) {
@@ -638,7 +743,13 @@ async function init() {
       $("answer").classList.remove("hidden");
       $("reveal-btn").classList.add("hidden");
       $("stars").classList.remove("hidden");
+      showCommentAside(quant.history[quant.historyIndex]);
     });
+
+    $("comment-add-btn").addEventListener("click", enterCommentEdit);
+    $("comment-edit-btn").addEventListener("click", enterCommentEdit);
+    $("comment-save-btn").addEventListener("click", saveComment);
+    $("comment-cancel-btn").addEventListener("click", cancelCommentEdit);
 
     $("timer-toggle").addEventListener("click", toggleTimer);
     $("next-btn").addEventListener("click", goNext);
