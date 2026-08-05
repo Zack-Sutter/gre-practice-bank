@@ -50,16 +50,18 @@ def save_times(times: dict[str, int]) -> None:
 
 def compute_stats(ratings: dict[str, int], times: dict[str, int] | None = None) -> dict:
     counts = {str(i): 0 for i in range(6)}
-    total = 0
-    rating_sum = 0
+    rated: list[int] = []
     for value in ratings.values():
         rating = max(0, min(5, int(value)))
         counts[str(rating)] += 1
-        total += 1
-        rating_sum += rating
-    average = rating_sum / total if total else 0.0
-    time_sum = sum(times.get(post_id, 0) for post_id in ratings) if times is not None else 0
-    average_time = time_sum / total if total and times is not None else 0.0
+        if rating > 0:
+            rated.append(rating)
+    average = sum(rated) / len(rated) if rated else 0.0
+    if times is not None:
+        nonzero_times = [t for post_id in ratings if (t := times.get(post_id, 0)) > 0]
+        average_time = sum(nonzero_times) / len(nonzero_times) if nonzero_times else 0.0
+    else:
+        average_time = 0.0
     payload = {"counts": counts, "average": average, "average_time": average_time, "ratings": ratings}
     if times is not None:
         payload["times"] = times

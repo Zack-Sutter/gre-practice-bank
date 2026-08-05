@@ -162,12 +162,11 @@ function computeAverageTime(stats) {
   if (stats.average_time != null && !Number.isNaN(stats.average_time)) {
     return stats.average_time;
   }
-  const ratings = stats.ratings || {};
   const times = stats.times || {};
-  const ids = Object.keys(ratings);
-  if (!ids.length) return 0;
-  const sum = ids.reduce((acc, id) => acc + (times[id] ?? 0), 0);
-  return sum / ids.length;
+  const nonzero = Object.keys(times).filter((id) => (times[id] ?? 0) > 0);
+  if (!nonzero.length) return 0;
+  const sum = nonzero.reduce((acc, id) => acc + times[id], 0);
+  return sum / nonzero.length;
 }
 
 function renderStats(stats) {
