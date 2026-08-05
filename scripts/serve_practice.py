@@ -21,6 +21,7 @@ WORD_TIMES_FILE = ROOT / "data" / "word_times.json"
 WORD_COMMENTS_FILE = ROOT / "data" / "word_comments.json"
 HOST = "127.0.0.1"
 PORT = 8765
+DATA_DIR = ROOT / "data"
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -43,7 +44,7 @@ def load_words() -> list[dict]:
 
 def load_ratings() -> dict[str, int]:
     if not RATINGS_FILE.exists():
-        raise FileNotFoundError("ratings.json not found; run scripts/seed_ratings.py first")
+        return {}
     return {k: int(v) for k, v in json.loads(RATINGS_FILE.read_text(encoding="utf-8")).items()}
 
 
@@ -73,12 +74,31 @@ def save_comments(comments: dict[str, str]) -> None:
 
 def load_word_ratings() -> dict[str, int]:
     if not WORD_RATINGS_FILE.exists():
-        raise FileNotFoundError("word_ratings.json not found; run scripts/seed_word_ratings.py first")
+        return {}
     return {k: int(v) for k, v in json.loads(WORD_RATINGS_FILE.read_text(encoding="utf-8")).items()}
 
 
 def save_word_ratings(ratings: dict[str, int]) -> None:
     WORD_RATINGS_FILE.write_text(json.dumps(ratings, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_data_files() -> None:
+    """Create data/ and seed ratings files from jsonl sources when missing."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not RATINGS_FILE.exists():
+        ratings: dict[str, int] = {}
+        for question in load_jsonl(QUESTIONS_FILE):
+            ratings[str(question["post_id"])] = 0
+        save_ratings(ratings)
+        print(f"created {RATINGS_FILE.relative_to(ROOT)} ({len(ratings)} questions)")
+
+    if not WORD_RATINGS_FILE.exists():
+        word_ratings: dict[str, int] = {}
+        for entry in load_jsonl(WORDS_FILE):
+            word_ratings[str(entry["word"])] = 0
+        save_word_ratings(word_ratings)
+        print(f"created {WORD_RATINGS_FILE.relative_to(ROOT)} ({len(word_ratings)} words)")
 
 
 def load_word_times() -> dict[str, int]:
@@ -156,12 +176,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/ratings":
-            try:
-                ratings = load_ratings()
-            except FileNotFoundError as exc:
-                self._send_error_json(500, str(exc))
-                return
-            self._send_json(200, compute_stats(ratings, load_times(), load_comments()))
+            self._send_json(200, compute_stats(load_ratings(), load_times(), load_comments()))
             return
 
         if path == "/api/words":
@@ -169,12 +184,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/word-ratings":
-            try:
-                ratings = load_word_ratings()
-            except FileNotFoundError as exc:
-                self._send_error_json(500, str(exc))
-                return
-            self._send_json(200, compute_stats(ratings, load_word_times(), load_word_comments()))
+            self._send_json(200, compute_stats(load_word_ratings(), load_word_times(), load_word_comments()))
             return
 
         if path in ("/", "/index.html"):
@@ -268,12 +278,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_error_json(400, "seconds must be >= 0")
             return
 
-        try:
-            ratings = load_ratings()
-        except FileNotFoundError as exc:
-            self._send_error_json(500, str(exc))
-            return
-
+        ratings = load_ratings()
         if item_id not in ratings:
             self._send_error_json(400, f"unknown {unknown_label}: {item_id}")
             return
@@ -305,12 +310,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_error_json(400, f"expected {{ {id_key}, comment }}")
             return
 
-        try:
-            ratings = load_ratings()
-        except FileNotFoundError as exc:
-            self._send_error_json(500, str(exc))
-            return
-
+        ratings = load_ratings()
         if item_id not in ratings:
             self._send_error_json(400, f"unknown {unknown_label}: {item_id}")
             return
@@ -335,6 +335,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    ensure_data_files()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"serving at http://{HOST}:{PORT}")
     try:
