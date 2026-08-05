@@ -13,9 +13,11 @@
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
-<body>
+<body class="mode-quant">
   <header class="header">
-    <h1 class="title">GRE Practice</h1>
+    <button class="title title-toggle" id="mode-title" type="button" aria-label="Switch to vocab practice">
+      GRE<span class="title-accent" id="mode-accent">quant</span>
+    </button>
     <div class="stats" id="stats">
       <div class="dist-wrap" title="Rating distribution">
         <div class="dist-chart" id="dist-bar" aria-label="Rating distribution"></div>
@@ -41,13 +43,14 @@
   <main class="main">
     <article class="card" id="question-card">
       <div class="question-body" id="question-body"></div>
+      <span class="prior-stats hidden" id="prior-stats"></span>
       <a class="source-link" id="source-link" href="#" target="_blank" rel="noopener noreferrer">Source</a>
 
       <div class="answer-section">
         <div class="reveal-bar">
           <button class="btn btn-primary" id="reveal-btn" type="button">Reveal Answer</button>
-          <span class="prior-stats hidden" id="prior-stats"></span>
         </div>
+        <div class="choices hidden" id="choices" role="group" aria-label="Answer choices"></div>
         <div class="answer hidden" id="answer"></div>
       </div>
 

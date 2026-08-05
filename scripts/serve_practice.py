@@ -14,18 +14,29 @@ UI_DIR = ROOT / "ui"
 QUESTIONS_FILE = ROOT / "data" / "questions.jsonl"
 RATINGS_FILE = ROOT / "data" / "ratings.json"
 TIMES_FILE = ROOT / "data" / "times.json"
+WORDS_FILE = ROOT / "data" / "words.jsonl"
+WORD_RATINGS_FILE = ROOT / "data" / "word_ratings.json"
+WORD_TIMES_FILE = ROOT / "data" / "word_times.json"
 HOST = "127.0.0.1"
 PORT = 8765
 
 
-def load_questions() -> list[dict]:
-    questions: list[dict] = []
-    if not QUESTIONS_FILE.exists():
-        return questions
-    for line in QUESTIONS_FILE.read_text(encoding="utf-8").splitlines():
+def load_jsonl(path: Path) -> list[dict]:
+    items: list[dict] = []
+    if not path.exists():
+        return items
+    for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
-            questions.append(json.loads(line))
-    return questions
+            items.append(json.loads(line))
+    return items
+
+
+def load_questions() -> list[dict]:
+    return load_jsonl(QUESTIONS_FILE)
+
+
+def load_words() -> list[dict]:
+    return load_jsonl(WORDS_FILE)
 
 
 def load_ratings() -> dict[str, int]:
@@ -46,6 +57,26 @@ def load_times() -> dict[str, int]:
 
 def save_times(times: dict[str, int]) -> None:
     TIMES_FILE.write_text(json.dumps(times, indent=2) + "\n", encoding="utf-8")
+
+
+def load_word_ratings() -> dict[str, int]:
+    if not WORD_RATINGS_FILE.exists():
+        raise FileNotFoundError("word_ratings.json not found; run scripts/seed_word_ratings.py first")
+    return {k: int(v) for k, v in json.loads(WORD_RATINGS_FILE.read_text(encoding="utf-8")).items()}
+
+
+def save_word_ratings(ratings: dict[str, int]) -> None:
+    WORD_RATINGS_FILE.write_text(json.dumps(ratings, indent=2) + "\n", encoding="utf-8")
+
+
+def load_word_times() -> dict[str, int]:
+    if not WORD_TIMES_FILE.exists():
+        return {}
+    return {k: int(v) for k, v in json.loads(WORD_TIMES_FILE.read_text(encoding="utf-8")).items()}
+
+
+def save_word_times(times: dict[str, int]) -> None:
+    WORD_TIMES_FILE.write_text(json.dumps(times, indent=2) + "\n", encoding="utf-8")
 
 
 def compute_stats(ratings: dict[str, int], times: dict[str, int] | None = None) -> dict:
@@ -105,6 +136,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, compute_stats(ratings, load_times()))
             return
 
+        if path == "/api/words":
+            self._send_json(200, {"words": load_words()})
+            return
+
+        if path == "/api/word-ratings":
+            try:
+                ratings = load_word_ratings()
+            except FileNotFoundError as exc:
+                self._send_error_json(500, str(exc))
+                return
+            self._send_json(200, compute_stats(ratings, load_word_times()))
+            return
+
         if path in ("/", "/index.html"):
             self._serve_file(UI_DIR / "index.html")
             return
@@ -119,17 +163,48 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path != "/api/ratings":
-            self._send_error_json(404, "not found")
+
+        if path == "/api/ratings":
+            self._save_rating(
+                id_key="post_id",
+                load_ratings=load_ratings,
+                save_ratings=save_ratings,
+                load_times=load_times,
+                save_times=save_times,
+                unknown_label="post_id",
+            )
             return
 
+        if path == "/api/word-ratings":
+            self._save_rating(
+                id_key="word",
+                load_ratings=load_word_ratings,
+                save_ratings=save_word_ratings,
+                load_times=load_word_times,
+                save_times=save_word_times,
+                unknown_label="word",
+            )
+            return
+
+        self._send_error_json(404, "not found")
+
+    def _save_rating(
+        self,
+        *,
+        id_key: str,
+        load_ratings,
+        save_ratings,
+        load_times,
+        save_times,
+        unknown_label: str,
+    ) -> None:
         try:
             body = self._read_json_body() or {}
-            post_id = str(body.get("post_id", ""))
+            item_id = str(body.get(id_key, ""))
             rating = int(body["rating"])
             seconds = int(body["seconds"])
         except (KeyError, TypeError, ValueError):
-            self._send_error_json(400, "expected { post_id, rating, seconds }")
+            self._send_error_json(400, f"expected {{ {id_key}, rating, seconds }}")
             return
 
         if rating < 1 or rating > 5:
@@ -146,15 +221,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_error_json(500, str(exc))
             return
 
-        if post_id not in ratings:
-            self._send_error_json(400, f"unknown post_id: {post_id}")
+        if item_id not in ratings:
+            self._send_error_json(400, f"unknown {unknown_label}: {item_id}")
             return
 
-        ratings[post_id] = rating
+        ratings[item_id] = rating
         save_ratings(ratings)
 
         times = load_times()
-        times[post_id] = seconds
+        times[item_id] = seconds
         save_times(times)
 
         self._send_json(200, compute_stats(ratings, times))

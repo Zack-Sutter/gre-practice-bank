@@ -19,12 +19,20 @@ Pipeline: scrape → store in-repo → display. Do not invent questions.
 ## Practice UI (done)
 Workflow: scrape all → `python scripts/seed_ratings.py` → `python scripts/serve_practice.py` → `http://127.0.0.1:8765`.
 
-- `ui/` — static HTML/CSS/JS + MathJax CDN. Dark theme.
-- `scripts/serve_practice.py` — serves UI; `GET /api/questions`, `GET /api/ratings`, `POST /api/ratings` (`{post_id, rating, seconds}`).
-- Reveal answer → rate 1–5 (saves rating + time, auto-advances). Timer auto-starts per question, pause/play icons, stops on reveal.
-- Next: weighted by rating tier (80/10/5/3/1/1 for 0–5). Previous: session history.
-- Header: rating distribution bar, avg rating (★), avg time (clock; includes unrated as 0s). Revisited questions show last rating + time.
-- Preserve `source_url` attribution.
+Vocab workflow: `python scripts/seed_word_ratings.py` (once) — uses `data/words.jsonl`.
+
+- `ui/` — static HTML/CSS/JS + MathJax CDN. Dark theme. Toggle **GREquant** / **GREvocab** via header title (default: quant). Per-mode page tint (cool blue-slate for quant, cool purple-slate for vocab).
+- `scripts/serve_practice.py` — serves UI; quant: `GET /api/questions`, `GET /api/ratings`, `POST /api/ratings` (`{post_id, rating, seconds}`); vocab: `GET /api/words`, `GET /api/word-ratings`, `POST /api/word-ratings` (`{word, rating, seconds}`).
+- Quant: reveal answer → rate 1–5 (saves rating + time, auto-advances). Vocab: fill-in-the-blank (example sentence) or definition prompt → 5 word choices → rate 1–5 → auto-advances.
+- Timer auto-starts per question, pause/play icons, stops on reveal (quant) or choice (vocab).
+- Next: weighted by rating tier (80/10/5/3/1/1 for 0–5). Previous: session history (per mode).
+- Header: rating distribution bar, avg rating (★), avg time (clock; includes unrated as 0s). Revisited items show last rating + time.
+- Preserve `source_url` attribution (quant only).
+
+## Vocab data
+- `data/words.jsonl` — vocabulary entries. Fields: `word`, `definition`, optional `example`.
+- `data/word_ratings.json` — self-ratings by `word` (`0` unrated, `1–5` ability). Gitignored; seed via `scripts/seed_word_ratings.py`.
+- `data/word_times.json` — seconds per word, saved on rate. Gitignored.
 
 ## Rules
 - Rate-limit scrapes. Prefer local data over re-fetching.
